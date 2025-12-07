@@ -57,25 +57,40 @@ export interface ItemSignedURLResponse {
 }
 
 /**
- * Item information for upload request
+ * Item information for upload request - includes full metadata for server-side manifest generation
  */
 export interface UploadItem {
   /** Relative path of the item within the dataset */
   relpath: string;
-  /** Optional size hint in bytes */
-  size_hint?: number;
+  /** Size of the item in bytes */
+  size_in_bytes: number;
+  /** Hash of the item content (MD5 hex digest) */
+  hash: string;
+  /** UTC timestamp of the item */
+  utc_timestamp: number;
 }
 
 /**
- * Request body for getting upload URLs
+ * Request body for getting upload URLs.
+ * The server uses this metadata to create admin_metadata, manifest, structure,
+ * tags, and annotations directly in storage. Only README and items need
+ * separate uploads via signed URLs.
  */
 export interface UploadRequest {
   /** Dataset UUID */
   uuid: string;
   /** Dataset name */
   name: string;
-  /** List of items to upload */
+  /** Username of the dataset creator */
+  creator_username: string;
+  /** UTC timestamp when dataset was frozen */
+  frozen_at: number;
+  /** List of items with full metadata */
   items?: UploadItem[];
+  /** Dataset tags */
+  tags?: string[];
+  /** Dataset annotations as key-value pairs */
+  annotations?: Record<string, unknown>;
 }
 
 /**
@@ -89,17 +104,13 @@ export interface UploadItemURL {
 }
 
 /**
- * Upload URLs for dataset structure files
+ * Upload URLs for dataset files.
+ * Only includes URLs for README and items - other metadata is written
+ * directly by the server.
  */
 export interface UploadURLs {
-  /** Signed URL for admin metadata */
-  admin_metadata: string;
   /** Signed URL for README */
   readme: string;
-  /** Signed URL for manifest */
-  manifest: string;
-  /** Signed URL for structure.json */
-  structure: string;
   /** Map of item identifier to upload URL info */
   items: Record<string, UploadItemURL>;
 }

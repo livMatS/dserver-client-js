@@ -365,10 +365,14 @@ export class DServerClient {
   /**
    * Create and upload a new dataset
    *
+   * The server handles admin_metadata, manifest, structure, tags, and annotations
+   * directly based on metadata sent in the upload request. We only need to upload
+   * README and item files.
+   *
    * @param baseUri - Base URI (e.g., "s3://bucket")
    * @param name - Dataset name
    * @param files - Files to upload
-   * @param options - Upload options
+   * @param options - Upload options (readme, tags, annotations)
    * @returns Upload completion response
    */
   async createDataset(
@@ -379,36 +383,51 @@ export class DServerClient {
   ): Promise<UploadCompleteResponse> {
     const uuid = generateUUID();
     const creatorUsername = "webapp-user"; // TODO: Get from token
+    const frozenAt = getCurrentTimestamp();
 
-    // Generate identifiers for all files
-    const itemsWithIds = await Promise.all(
-      files.map(async (file) => ({
-        ...file,
-        identifier: await generateIdentifier(file.relpath),
-      }))
+    // Build item metadata with identifiers and hashes
+    const itemsWithMetadata = await Promise.all(
+      files.map(async (file) => {
+        const identifier = await generateIdentifier(file.relpath);
+        const { size, hash } = await this.computeItemMetadata(file);
+        return {
+          ...file,
+          identifier,
+          size_in_bytes: size,
+          hash,
+          utc_timestamp: frozenAt,
+        };
+      })
     );
 
-    // Request upload URLs
+    // Request upload URLs - server writes metadata directly to storage
     const uploadInfo = await this.getUploadUrls(baseUri, {
       uuid,
       name,
-      items: files.map((f) => ({ relpath: f.relpath })),
+      creator_username: creatorUsername,
+      frozen_at: frozenAt,
+      items: itemsWithMetadata.map((item) => ({
+        relpath: item.relpath,
+        size_in_bytes: item.size_in_bytes,
+        hash: item.hash,
+        utc_timestamp: item.utc_timestamp,
+      })),
+      tags: options.tags,
+      annotations: options.annotations,
     });
 
-    const totalBytes = files.reduce((sum, f) => {
-      if (f.content instanceof Blob) {
-        return sum + f.content.size;
-      } else if (f.content instanceof ArrayBuffer) {
-        return sum + f.content.byteLength;
-      } else {
-        return sum + new TextEncoder().encode(f.content).length;
-      }
-    }, 0);
-
+    const totalBytes = itemsWithMetadata.reduce(
+      (sum, item) => sum + item.size_in_bytes,
+      0
+    );
     let uploadedBytes = 0;
 
+    // Upload README
+    const readme = options.readme || "---\n";
+    await this.uploadText(uploadInfo.upload_urls.readme, readme, options.signal);
+
     // Upload items in parallel with concurrency limit
-    await parallelLimit(itemsWithIds, 4, async (item) => {
+    await parallelLimit(itemsWithMetadata, 4, async (item) => {
       const uploadUrl = uploadInfo.upload_urls.items[item.identifier];
       if (!uploadUrl) {
         throw new DServerError(
@@ -418,17 +437,12 @@ export class DServerClient {
       }
 
       let body: BodyInit;
-      let size: number;
-
       if (item.content instanceof Blob) {
         body = item.content;
-        size = item.content.size;
       } else if (item.content instanceof ArrayBuffer) {
         body = item.content;
-        size = item.content.byteLength;
       } else {
         body = item.content;
-        size = new TextEncoder().encode(item.content).length;
       }
 
       const response = await this.fetchImpl(uploadUrl.url, {
@@ -447,108 +461,44 @@ export class DServerClient {
         );
       }
 
-      uploadedBytes += size;
+      uploadedBytes += item.size_in_bytes;
       options.onProgress?.(uploadedBytes, totalBytes, item.relpath);
     });
-
-    // Build and upload manifest
-    const manifest = await this.buildManifest(itemsWithIds);
-    await this.uploadJson(uploadInfo.upload_urls.manifest, manifest, options.signal);
-
-    // Upload admin metadata
-    const adminMetadata: AdminMetadata = {
-      uuid,
-      name,
-      type: "dataset",
-      creator_username: creatorUsername,
-      created_at: getCurrentTimestamp(),
-      frozen_at: getCurrentTimestamp(),
-    };
-    await this.uploadJson(
-      uploadInfo.upload_urls.admin_metadata,
-      adminMetadata,
-      options.signal
-    );
-
-    // Upload README if provided
-    if (options.readme) {
-      await this.uploadText(uploadInfo.upload_urls.readme, options.readme, options.signal);
-    } else {
-      // Upload empty README
-      await this.uploadText(uploadInfo.upload_urls.readme, "---\n", options.signal);
-    }
 
     // Signal upload complete
     return this.signalUploadComplete(uploadInfo.uri);
   }
 
   /**
-   * Build a manifest from file items
+   * Compute size and hash for a file item
    */
-  private async buildManifest(
-    items: Array<FileToUpload & { identifier: string }>
-  ): Promise<Manifest> {
-    const manifestItems: Record<string, ManifestItem> = {};
+  private async computeItemMetadata(
+    item: FileToUpload
+  ): Promise<{ size: number; hash: string }> {
+    let size: number;
+    let contentBuffer: ArrayBuffer;
 
-    for (const item of items) {
-      let size: number;
-      if (item.content instanceof Blob) {
-        size = item.content.size;
-      } else if (item.content instanceof ArrayBuffer) {
-        size = item.content.byteLength;
-      } else {
-        size = new TextEncoder().encode(item.content).length;
-      }
-
-      // Calculate hash (simplified - in production would hash content)
-      // Get content as BufferSource first
-      const contentBuffer: BufferSource = item.content instanceof Blob
-        ? await item.content.arrayBuffer()
-        : item.content instanceof ArrayBuffer
-        ? item.content
-        : new TextEncoder().encode(item.content);
-
-      const hashBuffer = await crypto.subtle.digest("MD5", contentBuffer).catch(() => {
-        // MD5 not always available, use SHA-256 as fallback
-        return crypto.subtle.digest("SHA-256", contentBuffer);
-      });
-
-      const hashArray = Array.from(new Uint8Array(await hashBuffer));
-      const hash = hashArray.map((b) => b.toString(16).padStart(2, "0")).join("");
-
-      manifestItems[item.identifier] = {
-        hash,
-        relpath: item.relpath,
-        size_in_bytes: size,
-        utc_timestamp: getCurrentTimestamp(),
-      };
+    if (item.content instanceof Blob) {
+      size = item.content.size;
+      contentBuffer = await item.content.arrayBuffer();
+    } else if (item.content instanceof ArrayBuffer) {
+      size = item.content.byteLength;
+      contentBuffer = item.content;
+    } else {
+      const encoded = new TextEncoder().encode(item.content);
+      size = encoded.length;
+      contentBuffer = encoded.buffer;
     }
 
-    return {
-      dtoolcore_version: "3.18.0",
-      hash_function: "md5sum_hexdigest",
-      items: manifestItems,
-    };
-  }
+    // Calculate MD5 hash (or SHA-256 as fallback)
+    const hashBuffer = await crypto.subtle
+      .digest("MD5", contentBuffer)
+      .catch(() => crypto.subtle.digest("SHA-256", contentBuffer));
 
-  /**
-   * Upload JSON data to a signed URL
-   */
-  private async uploadJson(
-    url: string,
-    data: unknown,
-    signal?: AbortSignal
-  ): Promise<void> {
-    const response = await this.fetchImpl(url, {
-      method: "PUT",
-      body: JSON.stringify(data),
-      headers: { "Content-Type": "application/json" },
-      signal,
-    });
+    const hashArray = Array.from(new Uint8Array(hashBuffer));
+    const hash = hashArray.map((b) => b.toString(16).padStart(2, "0")).join("");
 
-    if (!response.ok) {
-      throw new DServerError("Failed to upload JSON", response.status);
-    }
+    return { size, hash };
   }
 
   /**
