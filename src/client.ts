@@ -634,6 +634,16 @@ export class DServerClient {
     return this.request<ReadmeResponse>("GET", `/readmes/${encodedUri}`);
   }
 
+  /**
+   * Set readme for a dataset
+   */
+  async setReadme(uri: string, content: string): Promise<ReadmeResponse> {
+    const encodedUri = encodeURIComponent(uri);
+    return this.request<ReadmeResponse>("PUT", `/readmes/${encodedUri}`, {
+      readme: content,
+    });
+  }
+
   // =========================================================================
   // Tags API
   // =========================================================================
