@@ -8,7 +8,7 @@
 export { DServerClient } from "./client";
 
 // Types
-export {
+export type {
   // Configuration
   DServerClientConfig,
 
@@ -46,8 +46,10 @@ export {
   ReadmeResponse,
   ManifestResponse,
   SummaryInfo,
+} from "./types";
 
-  // Errors
+// Error classes (these are values, not just types)
+export {
   DServerError,
   AuthenticationError,
   AuthorizationError,

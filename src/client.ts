@@ -500,23 +500,16 @@ export class DServerClient {
       }
 
       // Calculate hash (simplified - in production would hash content)
-      const hashBuffer = await crypto.subtle.digest(
-        "MD5",
-        item.content instanceof Blob
-          ? await item.content.arrayBuffer()
-          : item.content instanceof ArrayBuffer
-          ? item.content
-          : new TextEncoder().encode(item.content)
-      ).catch(() => {
+      // Get content as BufferSource first
+      const contentBuffer: BufferSource = item.content instanceof Blob
+        ? await item.content.arrayBuffer()
+        : item.content instanceof ArrayBuffer
+        ? item.content
+        : new TextEncoder().encode(item.content);
+
+      const hashBuffer = await crypto.subtle.digest("MD5", contentBuffer).catch(() => {
         // MD5 not always available, use SHA-256 as fallback
-        return crypto.subtle.digest(
-          "SHA-256",
-          item.content instanceof Blob
-            ? item.content.arrayBuffer().then(ab => ab)
-            : item.content instanceof ArrayBuffer
-            ? item.content
-            : new TextEncoder().encode(item.content)
-        );
+        return crypto.subtle.digest("SHA-256", contentBuffer);
       });
 
       const hashArray = Array.from(new Uint8Array(await hashBuffer));
