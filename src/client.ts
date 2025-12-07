@@ -67,7 +67,8 @@ export class DServerClient {
   constructor(config: DServerClientConfig) {
     this.baseUrl = config.baseUrl.replace(/\/$/, ""); // Remove trailing slash
     this.token = config.token;
-    this.fetchImpl = config.fetch ?? fetch;
+    // Bind fetch to window/globalThis to avoid "Illegal invocation" errors
+    this.fetchImpl = config.fetch ?? fetch.bind(globalThis);
   }
 
   /**
