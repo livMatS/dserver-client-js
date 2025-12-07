@@ -12,7 +12,7 @@ export {
   // Configuration
   DServerClientConfig,
 
-  // API Response types
+  // Signed URL API Response types
   DatasetSignedURLsResponse,
   ItemSignedURLResponse,
   UploadRequest,
@@ -33,6 +33,19 @@ export {
   UploadOptions,
   FileToUpload,
   ProgressCallback,
+
+  // REST API types
+  DatasetEntry,
+  SearchQuery,
+  PaginationParams,
+  PaginationInfo,
+  PaginatedResponse,
+  ServerVersions,
+  TagsResponse,
+  AnnotationsResponse,
+  ReadmeResponse,
+  ManifestResponse,
+  SummaryInfo,
 
   // Errors
   DServerError,

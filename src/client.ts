@@ -20,6 +20,18 @@ import {
   AuthenticationError,
   AuthorizationError,
   NotFoundError,
+  // REST API types
+  DatasetEntry,
+  SearchQuery,
+  PaginationParams,
+  PaginationInfo,
+  PaginatedResponse,
+  ServerVersions,
+  TagsResponse,
+  AnnotationsResponse,
+  ReadmeResponse,
+  ManifestResponse,
+  SummaryInfo,
 } from "./types";
 
 import {
@@ -563,5 +575,225 @@ export class DServerClient {
     if (!response.ok) {
       throw new DServerError("Failed to upload text", response.status);
     }
+  }
+
+  // =========================================================================
+  // REST API Methods (standard dserver endpoints)
+  // =========================================================================
+
+  /**
+   * Get server configuration versions
+   */
+  async getServerVersions(): Promise<ServerVersions> {
+    const response = await this.request<{ versions: ServerVersions }>(
+      "GET",
+      "/config/versions"
+    );
+    return response.versions;
+  }
+
+  /**
+   * Check server health (no auth required)
+   */
+  async checkHealth(): Promise<{ status: string }> {
+    const url = `${this.baseUrl}/config/health`;
+    const response = await this.fetchImpl(url);
+    if (!response.ok) {
+      throw new DServerError("Health check failed", response.status);
+    }
+    return response.json();
+  }
+
+  /**
+   * Get user summary info
+   */
+  async getUserSummary(username: string): Promise<SummaryInfo> {
+    return this.request<SummaryInfo>("GET", `/users/${username}/summary`);
+  }
+
+  /**
+   * Search datasets with pagination
+   */
+  async searchDatasets(
+    query: SearchQuery,
+    pagination?: PaginationParams
+  ): Promise<PaginatedResponse<DatasetEntry>> {
+    const params = new URLSearchParams();
+    if (pagination?.page) params.set("page", String(pagination.page));
+    if (pagination?.page_size) params.set("page_size", String(pagination.page_size));
+    if (pagination?.sort) params.set("sort", pagination.sort);
+
+    const queryString = params.toString();
+    const path = `/uris${queryString ? `?${queryString}` : ""}`;
+
+    const url = `${this.baseUrl}${path}`;
+    const response = await this.fetchImpl(url, {
+      method: "POST",
+      headers: this.getHeaders(),
+      body: JSON.stringify(query),
+    });
+
+    if (!response.ok) {
+      this.handleErrorResponse(response);
+    }
+
+    const data: DatasetEntry[] = await response.json();
+    const paginationHeader = response.headers.get("x-pagination");
+    const paginationInfo: PaginationInfo = paginationHeader
+      ? JSON.parse(paginationHeader)
+      : { total: data.length, page: 1, per_page: data.length, pages: 1 };
+
+    return { data, pagination: paginationInfo };
+  }
+
+  /**
+   * Handle error responses (helper for methods that need headers)
+   */
+  private async handleErrorResponse(response: Response): Promise<never> {
+    let errorBody: unknown;
+    try {
+      errorBody = await response.json();
+    } catch {
+      errorBody = await response.text();
+    }
+
+    switch (response.status) {
+      case 401:
+        throw new AuthenticationError();
+      case 403:
+        throw new AuthorizationError();
+      case 404:
+        throw new NotFoundError();
+      default:
+        throw new DServerError(
+          `Request failed: ${response.statusText}`,
+          response.status,
+          response.statusText,
+          errorBody
+        );
+    }
+  }
+
+  /**
+   * Get manifest for a dataset
+   */
+  async getManifest(uri: string): Promise<ManifestResponse> {
+    const encodedUri = encodeURIComponent(uri);
+    return this.request<ManifestResponse>("GET", `/manifests/${encodedUri}`);
+  }
+
+  /**
+   * Get readme for a dataset
+   */
+  async getReadme(uri: string): Promise<ReadmeResponse> {
+    const encodedUri = encodeURIComponent(uri);
+    return this.request<ReadmeResponse>("GET", `/readmes/${encodedUri}`);
+  }
+
+  // =========================================================================
+  // Tags API
+  // =========================================================================
+
+  /**
+   * Get tags for a dataset
+   */
+  async getTags(uri: string): Promise<TagsResponse> {
+    const encodedUri = encodeURIComponent(uri);
+    return this.request<TagsResponse>("GET", `/tags/${encodedUri}`);
+  }
+
+  /**
+   * Set all tags for a dataset (replaces existing)
+   */
+  async setTags(uri: string, tags: string[]): Promise<TagsResponse> {
+    const encodedUri = encodeURIComponent(uri);
+    return this.request<TagsResponse>("PUT", `/tags/${encodedUri}`, { tags });
+  }
+
+  /**
+   * Add a single tag to a dataset
+   */
+  async addTag(uri: string, tag: string): Promise<TagsResponse> {
+    const encodedUri = encodeURIComponent(uri);
+    const encodedTag = encodeURIComponent(tag);
+    return this.request<TagsResponse>(
+      "POST",
+      `/tags/${encodedUri}/${encodedTag}`,
+      {}
+    );
+  }
+
+  /**
+   * Remove a single tag from a dataset
+   */
+  async removeTag(uri: string, tag: string): Promise<TagsResponse> {
+    const encodedUri = encodeURIComponent(uri);
+    const encodedTag = encodeURIComponent(tag);
+    return this.request<TagsResponse>(
+      "DELETE",
+      `/tags/${encodedUri}/${encodedTag}`
+    );
+  }
+
+  // =========================================================================
+  // Annotations API
+  // =========================================================================
+
+  /**
+   * Get annotations for a dataset
+   */
+  async getAnnotations(uri: string): Promise<AnnotationsResponse> {
+    const encodedUri = encodeURIComponent(uri);
+    return this.request<AnnotationsResponse>(
+      "GET",
+      `/annotations/${encodedUri}`
+    );
+  }
+
+  /**
+   * Set all annotations for a dataset (replaces existing)
+   */
+  async setAnnotations(
+    uri: string,
+    annotations: Record<string, unknown>
+  ): Promise<AnnotationsResponse> {
+    const encodedUri = encodeURIComponent(uri);
+    return this.request<AnnotationsResponse>(
+      "PUT",
+      `/annotations/${encodedUri}`,
+      { annotations }
+    );
+  }
+
+  /**
+   * Set a single annotation
+   */
+  async setAnnotation(
+    uri: string,
+    name: string,
+    value: unknown
+  ): Promise<AnnotationsResponse> {
+    const encodedUri = encodeURIComponent(uri);
+    const encodedName = encodeURIComponent(name);
+    return this.request<AnnotationsResponse>(
+      "PUT",
+      `/annotations/${encodedUri}/${encodedName}`,
+      { value }
+    );
+  }
+
+  /**
+   * Delete a single annotation
+   */
+  async deleteAnnotation(
+    uri: string,
+    name: string
+  ): Promise<AnnotationsResponse> {
+    const encodedUri = encodeURIComponent(uri);
+    const encodedName = encodeURIComponent(name);
+    return this.request<AnnotationsResponse>(
+      "DELETE",
+      `/annotations/${encodedUri}/${encodedName}`
+    );
   }
 }

@@ -265,3 +265,122 @@ export class NotFoundError extends DServerError {
     this.name = "NotFoundError";
   }
 }
+
+// =========================================================================
+// REST API Types (for standard dserver endpoints)
+// =========================================================================
+
+/**
+ * Dataset entry returned from search/list endpoints
+ */
+export interface DatasetEntry {
+  uuid: string;
+  uri: string;
+  base_uri: string;
+  name: string;
+  creator_username: string;
+  created_at: number;
+  frozen_at: number;
+  tags?: string[];
+  number_of_items?: number;
+  size_in_bytes?: number;
+}
+
+/**
+ * Search query parameters
+ */
+export interface SearchQuery {
+  free_text?: string;
+  creator_usernames?: string[];
+  base_uris?: string[];
+  uuids?: string[];
+  tags?: string[];
+}
+
+/**
+ * Pagination parameters for search
+ */
+export interface PaginationParams {
+  page?: number;
+  page_size?: number;
+  sort?: string;
+}
+
+/**
+ * Pagination info returned in headers
+ */
+export interface PaginationInfo {
+  total: number;
+  page: number;
+  per_page: number;
+  pages: number;
+}
+
+/**
+ * Response with pagination
+ */
+export interface PaginatedResponse<T> {
+  data: T[];
+  pagination: PaginationInfo;
+}
+
+/**
+ * Server config versions
+ */
+export interface ServerVersions {
+  dservercore?: string;
+  dserver_search_plugin_mongo?: string;
+  dserver_retrieve_plugin_mongo?: string;
+  dserver_direct_mongo_plugin?: string;
+  dserver_signed_url_plugin?: string;
+  dserver_dependency_graph_plugin?: string;
+  dserver_notification_plugin?: string;
+  [key: string]: string | undefined;
+}
+
+/**
+ * Tags response
+ */
+export interface TagsResponse {
+  tags: string[];
+}
+
+/**
+ * Annotations response (key-value pairs)
+ */
+export interface AnnotationsResponse {
+  annotations: Record<string, unknown>;
+}
+
+/**
+ * Readme response
+ */
+export interface ReadmeResponse {
+  readme: string;
+}
+
+/**
+ * Manifest response from REST API
+ */
+export interface ManifestResponse {
+  dtoolcore_version: string;
+  hash_function: string;
+  items: Record<string, ManifestItem>;
+}
+
+/**
+ * User summary info
+ */
+export interface SummaryInfo {
+  number_of_datasets: number;
+  total_size_in_bytes: number;
+  creator_usernames: string[];
+  base_uris: string[];
+  tags: string[];
+  datasets_per_creator: Record<string, number>;
+  datasets_per_base_uri: Record<string, number>;
+  datasets_per_tag: Record<string, number>;
+  size_in_bytes_per_creator: Record<string, number>;
+  size_in_bytes_per_base_uri: Record<string, number>;
+  size_in_bytes_per_tag: Record<string, number>;
+}
