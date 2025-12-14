@@ -395,3 +395,41 @@ export interface SummaryInfo {
   size_in_bytes_per_base_uri: Record<string, number>;
   size_in_bytes_per_tag: Record<string, number>;
 }
+
+// =========================================================================
+// User Management Types
+// =========================================================================
+
+/**
+ * User information returned from user endpoints
+ */
+export interface UserInfo {
+  username: string;
+  is_admin: boolean;
+  search_permissions_on_base_uris: string[];
+  register_permissions_on_base_uris: string[];
+}
+
+/**
+ * User creation/update request
+ */
+export interface UserRequest {
+  is_admin?: boolean;
+}
+
+/**
+ * Base URI information
+ */
+export interface BaseURIInfo {
+  base_uri: string;
+  users_with_search_permissions: string[];
+  users_with_register_permissions: string[];
+}
+
+/**
+ * Base URI permissions update request
+ */
+export interface BaseURIPermissionsRequest {
+  users_with_search_permissions?: string[];
+  users_with_register_permissions?: string[];
+}

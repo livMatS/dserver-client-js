@@ -32,6 +32,11 @@ import {
   ReadmeResponse,
   ManifestResponse,
   SummaryInfo,
+  // User management types
+  UserInfo,
+  UserRequest,
+  BaseURIInfo,
+  BaseURIPermissionsRequest,
 } from "./types";
 
 import {
@@ -749,5 +754,126 @@ export class DServerClient {
       "DELETE",
       `/annotations/${encodedUri}/${encodedName}`
     );
+  }
+
+  // =========================================================================
+  // User Management API (Admin only)
+  // =========================================================================
+
+  /**
+   * Get current user info (includes is_admin flag)
+   */
+  async getCurrentUser(): Promise<UserInfo> {
+    return this.request<UserInfo>("GET", "/me");
+  }
+
+  /**
+   * List all users (admin only)
+   */
+  async listUsers(): Promise<UserInfo[]> {
+    return this.request<UserInfo[]>("GET", "/users");
+  }
+
+  /**
+   * Get a specific user
+   */
+  async getUser(username: string): Promise<UserInfo> {
+    const encodedUsername = encodeURIComponent(username);
+    return this.request<UserInfo>("GET", `/users/${encodedUsername}`);
+  }
+
+  /**
+   * Create or register a new user (admin only)
+   */
+  async createUser(username: string, options?: UserRequest): Promise<UserInfo> {
+    const encodedUsername = encodeURIComponent(username);
+    return this.request<UserInfo>("POST", `/users/${encodedUsername}`, options || {});
+  }
+
+  /**
+   * Delete a user (admin only)
+   */
+  async deleteUser(username: string): Promise<void> {
+    const encodedUsername = encodeURIComponent(username);
+    await this.request<void>("DELETE", `/users/${encodedUsername}`);
+  }
+
+  /**
+   * Update user admin status (admin only)
+   */
+  async updateUserAdmin(username: string, isAdmin: boolean): Promise<UserInfo> {
+    const encodedUsername = encodeURIComponent(username);
+    return this.request<UserInfo>("PATCH", `/users/${encodedUsername}`, { is_admin: isAdmin });
+  }
+
+  // =========================================================================
+  // Base URI Management API (Admin only)
+  // =========================================================================
+
+  /**
+   * List all base URIs (admin only)
+   */
+  async listBaseURIs(): Promise<BaseURIInfo[]> {
+    return this.request<BaseURIInfo[]>("GET", "/base-uris");
+  }
+
+  /**
+   * Get a specific base URI
+   */
+  async getBaseURI(baseUri: string): Promise<BaseURIInfo> {
+    const encodedUri = encodeURIComponent(baseUri);
+    return this.request<BaseURIInfo>("GET", `/base-uris/${encodedUri}`);
+  }
+
+  /**
+   * Register a new base URI (admin only)
+   */
+  async createBaseURI(baseUri: string): Promise<BaseURIInfo> {
+    const encodedUri = encodeURIComponent(baseUri);
+    return this.request<BaseURIInfo>("POST", `/base-uris/${encodedUri}`, {});
+  }
+
+  /**
+   * Delete a base URI (admin only)
+   */
+  async deleteBaseURI(baseUri: string): Promise<void> {
+    const encodedUri = encodeURIComponent(baseUri);
+    await this.request<void>("DELETE", `/base-uris/${encodedUri}`);
+  }
+
+  /**
+   * Grant search permission to a user on a base URI (admin only)
+   */
+  async grantSearchPermission(username: string, baseUri: string): Promise<UserInfo> {
+    const encodedUsername = encodeURIComponent(username);
+    const encodedUri = encodeURIComponent(baseUri);
+    return this.request<UserInfo>("POST", `/users/${encodedUsername}/search/${encodedUri}`, {});
+  }
+
+  /**
+   * Revoke search permission from a user on a base URI (admin only)
+   */
+  async revokeSearchPermission(username: string, baseUri: string): Promise<UserInfo> {
+    const encodedUsername = encodeURIComponent(username);
+    const encodedUri = encodeURIComponent(baseUri);
+    return this.request<UserInfo>("DELETE", `/users/${encodedUsername}/search/${encodedUri}`);
+  }
+
+  /**
+   * Grant register permission to a user on a base URI (admin only)
+   */
+  async grantRegisterPermission(username: string, baseUri: string): Promise<UserInfo> {
+    const encodedUsername = encodeURIComponent(username);
+    const encodedUri = encodeURIComponent(baseUri);
+    return this.request<UserInfo>("POST", `/users/${encodedUsername}/register/${encodedUri}`, {});
+  }
+
+  /**
+   * Revoke register permission from a user on a base URI (admin only)
+   */
+  async revokeRegisterPermission(username: string, baseUri: string): Promise<UserInfo> {
+    const encodedUsername = encodeURIComponent(username);
+    const encodedUri = encodeURIComponent(baseUri);
+    return this.request<UserInfo>("DELETE", `/users/${encodedUsername}/register/${encodedUri}`);
   }
 }

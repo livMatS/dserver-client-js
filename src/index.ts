@@ -46,6 +46,12 @@ export type {
   ReadmeResponse,
   ManifestResponse,
   SummaryInfo,
+
+  // User management types
+  UserInfo,
+  UserRequest,
+  BaseURIInfo,
+  BaseURIPermissionsRequest,
 } from "./types";
 
 // Error classes (these are values, not just types)
