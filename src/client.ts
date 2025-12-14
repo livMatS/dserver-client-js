@@ -881,6 +881,21 @@ export class DServerClient {
   }
 
   // =========================================================================
+  // UUID Lookup API
+  // =========================================================================
+
+  /**
+   * Get datasets by UUID
+   * Returns all instances of a dataset with that UUID across base URIs the user has access to
+   *
+   * @param uuid - Dataset UUID
+   * @returns Array of datasets with that UUID
+   */
+  async getDatasetsByUuid(uuid: string): Promise<DatasetEntry[]> {
+    return this.request<DatasetEntry[]>("GET", `/uuids/${uuid}`);
+  }
+
+  // =========================================================================
   // Dependency Graph Plugin API
   // =========================================================================
 

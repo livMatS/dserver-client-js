@@ -439,16 +439,10 @@ export interface BaseURIPermissionsRequest {
 // =========================================================================
 
 /**
- * UUID reference in dependency data
- */
-export interface DependencyUuid {
-  uuid: string;
-}
-
-/**
- * Dataset entry with dependency information from graph plugin
+ * Dataset entry with dependency information from graph plugin.
+ * The derived_from field contains UUID strings of parent datasets.
  */
 export interface GraphDatasetEntry extends DatasetEntry {
-  /** UUIDs of datasets this dataset is derived from */
-  derived_from?: DependencyUuid[];
+  /** UUIDs of datasets this dataset is derived from (as string array) */
+  derived_from?: string[];
 }

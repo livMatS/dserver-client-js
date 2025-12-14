@@ -54,7 +54,6 @@ export type {
   BaseURIPermissionsRequest,
 
   // Dependency graph plugin types
-  DependencyUuid,
   GraphDatasetEntry,
 } from "./types";
 
