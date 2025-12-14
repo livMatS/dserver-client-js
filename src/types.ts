@@ -433,3 +433,22 @@ export interface BaseURIPermissionsRequest {
   users_with_search_permissions?: string[];
   users_with_register_permissions?: string[];
 }
+
+// =========================================================================
+// Dependency Graph Plugin Types
+// =========================================================================
+
+/**
+ * UUID reference in dependency data
+ */
+export interface DependencyUuid {
+  uuid: string;
+}
+
+/**
+ * Dataset entry with dependency information from graph plugin
+ */
+export interface GraphDatasetEntry extends DatasetEntry {
+  /** UUIDs of datasets this dataset is derived from */
+  derived_from?: DependencyUuid[];
+}

@@ -52,6 +52,10 @@ export type {
   UserRequest,
   BaseURIInfo,
   BaseURIPermissionsRequest,
+
+  // Dependency graph plugin types
+  DependencyUuid,
+  GraphDatasetEntry,
 } from "./types";
 
 // Error classes (these are values, not just types)

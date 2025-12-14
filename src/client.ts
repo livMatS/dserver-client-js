@@ -37,6 +37,8 @@ import {
   UserRequest,
   BaseURIInfo,
   BaseURIPermissionsRequest,
+  // Dependency graph types
+  GraphDatasetEntry,
 } from "./types";
 
 import {
@@ -784,10 +786,11 @@ export class DServerClient {
 
   /**
    * Create or register a new user (admin only)
+   * Note: dserver uses PUT for user creation/update (idempotent operation)
    */
   async createUser(username: string, options?: UserRequest): Promise<UserInfo> {
     const encodedUsername = encodeURIComponent(username);
-    return this.request<UserInfo>("POST", `/users/${encodedUsername}`, options || {});
+    return this.request<UserInfo>("PUT", `/users/${encodedUsername}`, options || {});
   }
 
   /**
@@ -875,5 +878,21 @@ export class DServerClient {
     const encodedUsername = encodeURIComponent(username);
     const encodedUri = encodeURIComponent(baseUri);
     return this.request<UserInfo>("DELETE", `/users/${encodedUsername}/register/${encodedUri}`);
+  }
+
+  // =========================================================================
+  // Dependency Graph Plugin API
+  // =========================================================================
+
+  /**
+   * Get dependency graph for a dataset by UUID
+   * Returns all datasets in the same dependency graph (bidirectional traversal)
+   * Requires dserver-dependency-graph-plugin to be installed
+   *
+   * @param uuid - Dataset UUID
+   * @returns Array of datasets in the dependency graph with derived_from relationships
+   */
+  async getDependencyGraph(uuid: string): Promise<GraphDatasetEntry[]> {
+    return this.request<GraphDatasetEntry[]>("GET", `/graph/uuids/${uuid}`);
   }
 }
