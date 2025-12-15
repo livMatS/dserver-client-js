@@ -905,9 +905,17 @@ export class DServerClient {
    * Requires dserver-dependency-graph-plugin to be installed
    *
    * @param uuid - Dataset UUID
+   * @param dependencyKeys - Optional array of custom dependency keys (e.g., ["readme.derived_from.uuid"])
    * @returns Array of datasets in the dependency graph with derived_from relationships
    */
-  async getDependencyGraph(uuid: string): Promise<GraphDatasetEntry[]> {
+  async getDependencyGraph(uuid: string, dependencyKeys?: string[]): Promise<GraphDatasetEntry[]> {
+    if (dependencyKeys && dependencyKeys.length > 0) {
+      // Use POST endpoint with custom dependency keys
+      return this.request<GraphDatasetEntry[]>("POST", `/graph/uuids/${uuid}`, {
+        dependency_keys: dependencyKeys,
+      });
+    }
+    // Use default GET endpoint
     return this.request<GraphDatasetEntry[]>("GET", `/graph/uuids/${uuid}`);
   }
 }
