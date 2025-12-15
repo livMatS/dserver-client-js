@@ -802,11 +802,23 @@ export class DServerClient {
   }
 
   /**
+   * Update user fields (partial update, admin only)
+   *
+   * @param username - Username to update
+   * @param updates - Fields to update (is_admin, display_name)
+   * @returns Updated user info
+   */
+  async updateUser(username: string, updates: { is_admin?: boolean; display_name?: string | null }): Promise<UserInfo> {
+    const encodedUsername = encodeURIComponent(username);
+    return this.request<UserInfo>("PATCH", `/users/${encodedUsername}`, updates);
+  }
+
+  /**
    * Update user admin status (admin only)
+   * @deprecated Use updateUser() instead for more flexibility
    */
   async updateUserAdmin(username: string, isAdmin: boolean): Promise<UserInfo> {
-    const encodedUsername = encodeURIComponent(username);
-    return this.request<UserInfo>("PATCH", `/users/${encodedUsername}`, { is_admin: isAdmin });
+    return this.updateUser(username, { is_admin: isAdmin });
   }
 
   // =========================================================================

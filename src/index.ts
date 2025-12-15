@@ -50,6 +50,7 @@ export type {
   // User management types
   UserInfo,
   UserRequest,
+  UserUpdateRequest,
   BaseURIInfo,
   BaseURIPermissionsRequest,
 

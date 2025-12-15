@@ -405,16 +405,26 @@ export interface SummaryInfo {
  */
 export interface UserInfo {
   username: string;
+  display_name?: string | null;
   is_admin: boolean;
   search_permissions_on_base_uris: string[];
   register_permissions_on_base_uris: string[];
 }
 
 /**
- * User creation/update request
+ * User creation/update request (PUT - full replacement)
  */
 export interface UserRequest {
   is_admin?: boolean;
+  display_name?: string | null;
+}
+
+/**
+ * User partial update request (PATCH)
+ */
+export interface UserUpdateRequest {
+  is_admin?: boolean;
+  display_name?: string | null;
 }
 
 /**
