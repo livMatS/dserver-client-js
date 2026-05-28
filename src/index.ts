@@ -46,6 +46,7 @@ export type {
   ReadmeResponse,
   ManifestResponse,
   SummaryInfo,
+  UserWithPermissions,
 } from "./types";
 
 // Error classes (these are values, not just types)

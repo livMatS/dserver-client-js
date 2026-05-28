@@ -32,6 +32,7 @@ import {
   ReadmeResponse,
   ManifestResponse,
   SummaryInfo,
+  UserWithPermissions,
 } from "./types";
 
 import {
@@ -553,6 +554,20 @@ export class DServerClient {
    */
   async getUserSummary(username: string): Promise<SummaryInfo> {
     return this.request<SummaryInfo>("GET", `/users/${username}/summary`);
+  }
+
+  /**
+   * Get information on the currently authenticated user.
+   */
+  async getMe(): Promise<UserWithPermissions> {
+    return this.request<UserWithPermissions>("GET", "/me");
+  }
+
+  /**
+   * Get the summary for the currently authenticated user — no username needed.
+   */
+  async getMySummary(): Promise<SummaryInfo> {
+    return this.request<SummaryInfo>("GET", "/me/summary");
   }
 
   /**
