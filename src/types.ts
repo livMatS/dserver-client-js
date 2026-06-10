@@ -295,6 +295,10 @@ export interface DatasetEntry {
   tags?: string[];
   number_of_items?: number;
   size_in_bytes?: number;
+  /** Authenticated identity that registered the dataset (server-asserted). */
+  uploaded_by?: string | null;
+  /** Unix timestamp of the registration. */
+  uploaded_at?: number | null;
 }
 
 /**
@@ -306,6 +310,8 @@ export interface SearchQuery {
   base_uris?: string[];
   uuids?: string[];
   tags?: string[];
+  /** Authenticated identities that registered the datasets (server-asserted). */
+  uploaded_by?: string[];
 }
 
 /**
@@ -394,6 +400,10 @@ export interface SummaryInfo {
   size_in_bytes_per_creator: Record<string, number>;
   size_in_bytes_per_base_uri: Record<string, number>;
   size_in_bytes_per_tag: Record<string, number>;
+  /** Authenticated identities that registered datasets (server-asserted). */
+  uploaders?: string[];
+  datasets_per_uploader?: Record<string, number>;
+  size_in_bytes_per_uploader?: Record<string, number>;
 }
 
 // =========================================================================
