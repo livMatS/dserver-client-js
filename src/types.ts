@@ -251,8 +251,8 @@ export class DServerError extends Error {
  * Error thrown when authentication fails
  */
 export class AuthenticationError extends DServerError {
-  constructor(message = "Authentication failed") {
-    super(message, 401, "Unauthorized");
+  constructor(message = "Authentication failed", body?: unknown) {
+    super(message, 401, "Unauthorized", body);
     this.name = "AuthenticationError";
   }
 }
@@ -261,8 +261,8 @@ export class AuthenticationError extends DServerError {
  * Error thrown when authorization fails
  */
 export class AuthorizationError extends DServerError {
-  constructor(message = "Access denied") {
-    super(message, 403, "Forbidden");
+  constructor(message = "Access denied", body?: unknown) {
+    super(message, 403, "Forbidden", body);
     this.name = "AuthorizationError";
   }
 }
@@ -271,8 +271,8 @@ export class AuthorizationError extends DServerError {
  * Error thrown when a resource is not found
  */
 export class NotFoundError extends DServerError {
-  constructor(message = "Resource not found") {
-    super(message, 404, "Not Found");
+  constructor(message = "Resource not found", body?: unknown) {
+    super(message, 404, "Not Found", body);
     this.name = "NotFoundError";
   }
 }

@@ -39,6 +39,24 @@ export function encodeUri(uri: string): string {
 }
 
 /**
+ * Extract the subject (username) from a JWT without verifying it.
+ * Returns undefined for malformed tokens.
+ */
+export function getJwtSubject(token: string): string | undefined {
+  const parts = token.split(".");
+  if (parts.length !== 3) {
+    return undefined;
+  }
+  try {
+    const base64 = parts[1].replace(/-/g, "+").replace(/_/g, "/");
+    const payload = JSON.parse(atob(base64));
+    return typeof payload.sub === "string" ? payload.sub : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+/**
  * Get current Unix timestamp
  */
 export function getCurrentTimestamp(): number {
@@ -120,6 +138,15 @@ export async function withRetry<T>(
     } catch (error) {
       lastError = error as Error;
 
+      // Aborts and client errors (4xx) will not succeed on retry.
+      const status = (error as { status?: number }).status;
+      if (
+        lastError.name === "AbortError" ||
+        (typeof status === "number" && status >= 400 && status < 500)
+      ) {
+        throw lastError;
+      }
+
       if (attempt < maxRetries) {
         await delay(currentDelay);
         currentDelay = Math.min(currentDelay * backoffFactor, maxDelay);
@@ -149,23 +176,33 @@ export async function parallelLimit<T, R>(
   limit: number,
   fn: (item: T) => Promise<R>
 ): Promise<R[]> {
-  const results: R[] = [];
-  const executing: Promise<void>[] = [];
+  const results: Promise<R>[] = [];
+  const executing = new Set<Promise<void>>();
 
   for (const item of items) {
     const p = Promise.resolve().then(() => fn(item));
-    results.push(p as unknown as R);
+    results.push(p);
 
-    if (limit <= items.length) {
-      const e = p.then(() => {
-        executing.splice(executing.indexOf(e), 1);
-      });
-      executing.push(e);
-      if (executing.length >= limit) {
-        await Promise.race(executing);
-      }
+    // Track completion without rethrowing here, so a rejected task cannot
+    // surface as an unhandled rejection while later tasks are still queued.
+    const e = p.then(
+      () => undefined,
+      () => undefined
+    ).then(() => {
+      executing.delete(e);
+    });
+    executing.add(e);
+    if (executing.size >= limit) {
+      await Promise.race(executing);
     }
   }
 
-  return Promise.all(results);
+  // Wait for everything to settle so every rejection is observed, then
+  // surface the first failure.
+  const settled = await Promise.allSettled(results);
+  const firstRejected = settled.find((s) => s.status === "rejected");
+  if (firstRejected) {
+    throw (firstRejected as PromiseRejectedResult).reason;
+  }
+  return settled.map((s) => (s as PromiseFulfilledResult<R>).value);
 }

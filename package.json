@@ -22,6 +22,7 @@
     "lint": "eslint src --ext .ts",
     "test": "vitest run",
     "test:watch": "vitest",
+    "prepare": "npm run build",
     "prepublishOnly": "npm run build"
   },
   "keywords": [
@@ -39,7 +40,11 @@
     "type": "git",
     "url": "https://github.com/livMatS/dserver-client-js"
   },
+  "dependencies": {
+    "spark-md5": "^3.0.2"
+  },
   "devDependencies": {
+    "@types/spark-md5": "^3.0.5",
     "@types/node": "^20.10.0",
     "eslint": "^8.55.0",
     "tsup": "^8.0.0",
