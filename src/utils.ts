@@ -2,6 +2,48 @@
  * Utility functions for dserver client
  */
 
+import type { PaginationInfo } from "./types";
+
+/**
+ * Parse an X-Pagination response header into a PaginationInfo.
+ *
+ * dservercore (flask-smorest) emits
+ * {"total", "total_pages", "first_page", "last_page", "page", "next_page"}
+ * — note: no "pages" or "per_page" fields. Other servers may emit
+ * {"total", "page", "per_page", "pages"} directly. Both shapes are
+ * normalized here; missing fields are derived from the requested page
+ * size and the number of returned items.
+ */
+export function parsePaginationHeader(
+  headerValue: string | null | undefined,
+  requestedPageSize: number | undefined,
+  dataLength: number
+): PaginationInfo {
+  let raw: Record<string, unknown> = {};
+  if (headerValue) {
+    try {
+      raw = JSON.parse(headerValue);
+    } catch {
+      // Malformed header: fall through to derived defaults.
+    }
+  }
+  const total = typeof raw.total === "number" ? raw.total : dataLength;
+  const page = typeof raw.page === "number" ? raw.page : 1;
+  const per_page =
+    typeof raw.per_page === "number"
+      ? raw.per_page
+      : (requestedPageSize ?? dataLength);
+  let pages: number;
+  if (typeof raw.pages === "number") {
+    pages = raw.pages;
+  } else if (typeof raw.total_pages === "number") {
+    pages = raw.total_pages;
+  } else {
+    pages = per_page > 0 ? Math.ceil(total / per_page) : 1;
+  }
+  return { total, page, per_page, pages };
+}
+
 /**
  * Generate a SHA-1 hash of a string (item identifier from relpath)
  * Uses the Web Crypto API which is available in browsers and Node.js 18+

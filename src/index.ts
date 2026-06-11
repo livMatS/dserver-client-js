@@ -71,6 +71,7 @@ export {
   generateIdentifier,
   generateUUID,
   encodeUri,
+  parsePaginationHeader,
   getCurrentTimestamp,
   parseISOTimestamp,
   isExpired,

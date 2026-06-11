@@ -48,6 +48,7 @@ import {
   getCurrentTimestamp,
   getJwtSubject,
   parallelLimit,
+  parsePaginationHeader,
 } from "./utils";
 
 import SparkMD5 from "spark-md5";
@@ -588,10 +589,11 @@ export class DServerClient {
     }
 
     const data: DatasetEntry[] = await response.json();
-    const paginationHeader = response.headers.get("x-pagination");
-    const paginationInfo: PaginationInfo = paginationHeader
-      ? JSON.parse(paginationHeader)
-      : { total: data.length, page: 1, per_page: data.length, pages: 1 };
+    const paginationInfo: PaginationInfo = parsePaginationHeader(
+      response.headers.get("x-pagination"),
+      pagination?.page_size,
+      data.length
+    );
 
     return { data, pagination: paginationInfo };
   }
