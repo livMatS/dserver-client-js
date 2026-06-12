@@ -48,6 +48,7 @@ export type {
   SummaryInfo,
 
   // User management types
+  UserWithPermissions,
   UserInfo,
   UserRequest,
   UserUpdateRequest,

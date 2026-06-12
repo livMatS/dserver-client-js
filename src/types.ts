@@ -386,6 +386,16 @@ export interface ManifestResponse {
 }
 
 /**
+ * Authenticated user info (response of GET /me).
+ */
+export interface UserWithPermissions {
+  username: string | null;
+  is_admin: boolean;
+  register_permissions_on_base_uris: string[];
+  search_permissions_on_base_uris: string[];
+}
+
+/**
  * User summary info
  */
 export interface SummaryInfo {
