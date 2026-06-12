@@ -251,8 +251,8 @@ export class DServerError extends Error {
  * Error thrown when authentication fails
  */
 export class AuthenticationError extends DServerError {
-  constructor(message = "Authentication failed") {
-    super(message, 401, "Unauthorized");
+  constructor(message = "Authentication failed", body?: unknown) {
+    super(message, 401, "Unauthorized", body);
     this.name = "AuthenticationError";
   }
 }
@@ -261,8 +261,8 @@ export class AuthenticationError extends DServerError {
  * Error thrown when authorization fails
  */
 export class AuthorizationError extends DServerError {
-  constructor(message = "Access denied") {
-    super(message, 403, "Forbidden");
+  constructor(message = "Access denied", body?: unknown) {
+    super(message, 403, "Forbidden", body);
     this.name = "AuthorizationError";
   }
 }
@@ -271,8 +271,8 @@ export class AuthorizationError extends DServerError {
  * Error thrown when a resource is not found
  */
 export class NotFoundError extends DServerError {
-  constructor(message = "Resource not found") {
-    super(message, 404, "Not Found");
+  constructor(message = "Resource not found", body?: unknown) {
+    super(message, 404, "Not Found", body);
     this.name = "NotFoundError";
   }
 }
@@ -295,6 +295,10 @@ export interface DatasetEntry {
   tags?: string[];
   number_of_items?: number;
   size_in_bytes?: number;
+  /** Authenticated identity that registered the dataset (server-asserted). */
+  uploaded_by?: string | null;
+  /** Unix timestamp of the registration. */
+  uploaded_at?: number | null;
 }
 
 /**
@@ -306,6 +310,8 @@ export interface SearchQuery {
   base_uris?: string[];
   uuids?: string[];
   tags?: string[];
+  /** Authenticated identities that registered the datasets (server-asserted). */
+  uploaded_by?: string[];
 }
 
 /**
@@ -404,4 +410,69 @@ export interface SummaryInfo {
   size_in_bytes_per_creator: Record<string, number>;
   size_in_bytes_per_base_uri: Record<string, number>;
   size_in_bytes_per_tag: Record<string, number>;
+  /** Authenticated identities that registered datasets (server-asserted). */
+  uploaders?: string[];
+  datasets_per_uploader?: Record<string, number>;
+  size_in_bytes_per_uploader?: Record<string, number>;
+}
+
+// =========================================================================
+// User Management Types
+// =========================================================================
+
+/**
+ * User information returned from user endpoints
+ */
+export interface UserInfo {
+  username: string;
+  display_name?: string | null;
+  is_admin: boolean;
+  search_permissions_on_base_uris: string[];
+  register_permissions_on_base_uris: string[];
+}
+
+/**
+ * User creation/update request (PUT - full replacement)
+ */
+export interface UserRequest {
+  is_admin?: boolean;
+  display_name?: string | null;
+}
+
+/**
+ * User partial update request (PATCH)
+ */
+export interface UserUpdateRequest {
+  is_admin?: boolean;
+  display_name?: string | null;
+}
+
+/**
+ * Base URI information
+ */
+export interface BaseURIInfo {
+  base_uri: string;
+  users_with_search_permissions: string[];
+  users_with_register_permissions: string[];
+}
+
+/**
+ * Base URI permissions update request
+ */
+export interface BaseURIPermissionsRequest {
+  users_with_search_permissions?: string[];
+  users_with_register_permissions?: string[];
+}
+
+// =========================================================================
+// Dependency Graph Plugin Types
+// =========================================================================
+
+/**
+ * Dataset entry with dependency information from graph plugin.
+ * The derived_from field contains UUID strings of parent datasets.
+ */
+export interface GraphDatasetEntry extends DatasetEntry {
+  /** UUIDs of datasets this dataset is derived from (as string array) */
+  derived_from?: string[];
 }

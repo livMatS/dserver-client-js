@@ -32,7 +32,14 @@ import {
   ReadmeResponse,
   ManifestResponse,
   SummaryInfo,
+  // User management types
   UserWithPermissions,
+  UserInfo,
+  UserRequest,
+  BaseURIInfo,
+  BaseURIPermissionsRequest,
+  // Dependency graph types
+  GraphDatasetEntry,
 } from "./types";
 
 import {
@@ -40,8 +47,30 @@ import {
   generateIdentifier,
   generateUUID,
   getCurrentTimestamp,
+  getJwtSubject,
   parallelLimit,
+  parsePaginationHeader,
 } from "./utils";
+
+import SparkMD5 from "spark-md5";
+
+/**
+ * Pull a human-readable message out of a dserver error body, if present.
+ */
+function extractErrorMessage(errorBody: unknown): string | undefined {
+  if (typeof errorBody === "string" && errorBody.trim()) {
+    return errorBody;
+  }
+  if (errorBody && typeof errorBody === "object") {
+    const body = errorBody as Record<string, unknown>;
+    for (const key of ["message", "error", "description", "msg"]) {
+      if (typeof body[key] === "string" && (body[key] as string).trim()) {
+        return body[key] as string;
+      }
+    }
+  }
+  return undefined;
+}
 
 /**
  * Client for interacting with dserver's signed URL API
@@ -115,31 +144,12 @@ export class DServerClient {
     const response = await this.fetchImpl(url, options);
 
     if (!response.ok) {
-      let errorBody: unknown;
-      try {
-        errorBody = await response.json();
-      } catch {
-        errorBody = await response.text();
-      }
-
-      switch (response.status) {
-        case 401:
-          throw new AuthenticationError();
-        case 403:
-          throw new AuthorizationError();
-        case 404:
-          throw new NotFoundError();
-        default:
-          throw new DServerError(
-            `Request failed: ${response.statusText}`,
-            response.status,
-            response.statusText,
-            errorBody
-          );
-      }
+      return this.handleErrorResponse(response);
     }
 
-    return response.json();
+    // Some endpoints (e.g. user PUT/DELETE) return an empty body on success.
+    const text = await response.text();
+    return (text ? JSON.parse(text) : undefined) as T;
   }
 
   // =========================================================================
@@ -383,7 +393,8 @@ export class DServerClient {
     options: UploadOptions = {}
   ): Promise<UploadCompleteResponse> {
     const uuid = generateUUID();
-    const creatorUsername = "webapp-user"; // TODO: Get from token
+    const creatorUsername =
+      (this.token && getJwtSubject(this.token)) || "webapp-user";
     const frozenAt = getCurrentTimestamp();
 
     // Build item metadata with identifiers and hashes
@@ -491,13 +502,9 @@ export class DServerClient {
       contentBuffer = encoded.buffer;
     }
 
-    // Calculate MD5 hash (or SHA-256 as fallback)
-    const hashBuffer = await crypto.subtle
-      .digest("MD5", contentBuffer)
-      .catch(() => crypto.subtle.digest("SHA-256", contentBuffer));
-
-    const hashArray = Array.from(new Uint8Array(hashBuffer));
-    const hash = hashArray.map((b) => b.toString(16).padStart(2, "0")).join("");
+    // Calculate MD5 hash. WebCrypto does not support MD5, so use spark-md5;
+    // dtool manifests record MD5 digests, so the hash function must match.
+    const hash = SparkMD5.ArrayBuffer.hash(contentBuffer);
 
     return { size, hash };
   }
@@ -593,39 +600,44 @@ export class DServerClient {
     });
 
     if (!response.ok) {
-      this.handleErrorResponse(response);
+      await this.handleErrorResponse(response);
     }
 
     const data: DatasetEntry[] = await response.json();
-    const paginationHeader = response.headers.get("x-pagination");
-    const paginationInfo: PaginationInfo = paginationHeader
-      ? JSON.parse(paginationHeader)
-      : { total: data.length, page: 1, per_page: data.length, pages: 1 };
+    const paginationInfo: PaginationInfo = parsePaginationHeader(
+      response.headers.get("x-pagination"),
+      pagination?.page_size,
+      data.length
+    );
 
     return { data, pagination: paginationInfo };
   }
 
   /**
-   * Handle error responses (helper for methods that need headers)
+   * Read the error body and throw a typed error carrying the server's
+   * message so callers can surface the actual reason for the failure.
    */
   private async handleErrorResponse(response: Response): Promise<never> {
-    let errorBody: unknown;
+    const text = await response.text();
+    let errorBody: unknown = text;
     try {
-      errorBody = await response.json();
+      errorBody = JSON.parse(text);
     } catch {
-      errorBody = await response.text();
+      // keep raw text
     }
+
+    const serverMessage = extractErrorMessage(errorBody);
 
     switch (response.status) {
       case 401:
-        throw new AuthenticationError();
+        throw new AuthenticationError(serverMessage, errorBody);
       case 403:
-        throw new AuthorizationError();
+        throw new AuthorizationError(serverMessage, errorBody);
       case 404:
-        throw new NotFoundError();
+        throw new NotFoundError(serverMessage, errorBody);
       default:
         throw new DServerError(
-          `Request failed: ${response.statusText}`,
+          serverMessage ?? `Request failed: ${response.statusText}`,
           response.status,
           response.statusText,
           errorBody
@@ -764,5 +776,184 @@ export class DServerClient {
       "DELETE",
       `/annotations/${encodedUri}/${encodedName}`
     );
+  }
+
+  // =========================================================================
+  // User Management API (Admin only)
+  // =========================================================================
+
+  /**
+   * Get current user info (includes is_admin flag)
+   */
+  async getCurrentUser(): Promise<UserInfo> {
+    return this.request<UserInfo>("GET", "/me");
+  }
+
+  /**
+   * List all users (admin only)
+   */
+  async listUsers(): Promise<UserInfo[]> {
+    return this.request<UserInfo[]>("GET", "/users");
+  }
+
+  /**
+   * Get a specific user
+   */
+  async getUser(username: string): Promise<UserInfo> {
+    const encodedUsername = encodeURIComponent(username);
+    return this.request<UserInfo>("GET", `/users/${encodedUsername}`);
+  }
+
+  /**
+   * Create or register a new user (admin only)
+   * Note: dserver uses PUT for user creation/update (idempotent operation)
+   */
+  async createUser(username: string, options?: UserRequest): Promise<UserInfo> {
+    const encodedUsername = encodeURIComponent(username);
+    return this.request<UserInfo>("PUT", `/users/${encodedUsername}`, options || {});
+  }
+
+  /**
+   * Delete a user (admin only)
+   */
+  async deleteUser(username: string): Promise<void> {
+    const encodedUsername = encodeURIComponent(username);
+    await this.request<void>("DELETE", `/users/${encodedUsername}`);
+  }
+
+  /**
+   * Update user fields (partial update, admin only)
+   *
+   * @param username - Username to update
+   * @param updates - Fields to update (is_admin, display_name)
+   * @returns Updated user info
+   */
+  async updateUser(username: string, updates: { is_admin?: boolean; display_name?: string | null }): Promise<UserInfo> {
+    const encodedUsername = encodeURIComponent(username);
+    return this.request<UserInfo>("PATCH", `/users/${encodedUsername}`, updates);
+  }
+
+  /**
+   * Update user admin status (admin only)
+   * @deprecated Use updateUser() instead for more flexibility
+   */
+  async updateUserAdmin(username: string, isAdmin: boolean): Promise<UserInfo> {
+    return this.updateUser(username, { is_admin: isAdmin });
+  }
+
+  // =========================================================================
+  // Base URI Management API (Admin only)
+  // =========================================================================
+
+  /**
+   * List all base URIs (admin only)
+   */
+  async listBaseURIs(): Promise<BaseURIInfo[]> {
+    return this.request<BaseURIInfo[]>("GET", "/base-uris");
+  }
+
+  /**
+   * Get a specific base URI
+   */
+  async getBaseURI(baseUri: string): Promise<BaseURIInfo> {
+    const encodedUri = encodeURIComponent(baseUri);
+    return this.request<BaseURIInfo>("GET", `/base-uris/${encodedUri}`);
+  }
+
+  /**
+   * Register a new base URI (admin only)
+   */
+  async createBaseURI(baseUri: string): Promise<BaseURIInfo> {
+    const encodedUri = encodeURIComponent(baseUri);
+    return this.request<BaseURIInfo>("POST", `/base-uris/${encodedUri}`, {});
+  }
+
+  /**
+   * Delete a base URI (admin only)
+   */
+  async deleteBaseURI(baseUri: string): Promise<void> {
+    const encodedUri = encodeURIComponent(baseUri);
+    await this.request<void>("DELETE", `/base-uris/${encodedUri}`);
+  }
+
+  /**
+   * Grant search permission to a user on a base URI (admin only)
+   */
+  async grantSearchPermission(username: string, baseUri: string): Promise<UserInfo> {
+    const encodedUsername = encodeURIComponent(username);
+    const encodedUri = encodeURIComponent(baseUri);
+    return this.request<UserInfo>("POST", `/users/${encodedUsername}/search/${encodedUri}`, {});
+  }
+
+  /**
+   * Revoke search permission from a user on a base URI (admin only)
+   */
+  async revokeSearchPermission(username: string, baseUri: string): Promise<UserInfo> {
+    const encodedUsername = encodeURIComponent(username);
+    const encodedUri = encodeURIComponent(baseUri);
+    return this.request<UserInfo>("DELETE", `/users/${encodedUsername}/search/${encodedUri}`);
+  }
+
+  /**
+   * Grant register permission to a user on a base URI (admin only)
+   */
+  async grantRegisterPermission(username: string, baseUri: string): Promise<UserInfo> {
+    const encodedUsername = encodeURIComponent(username);
+    const encodedUri = encodeURIComponent(baseUri);
+    return this.request<UserInfo>("POST", `/users/${encodedUsername}/register/${encodedUri}`, {});
+  }
+
+  /**
+   * Revoke register permission from a user on a base URI (admin only)
+   */
+  async revokeRegisterPermission(username: string, baseUri: string): Promise<UserInfo> {
+    const encodedUsername = encodeURIComponent(username);
+    const encodedUri = encodeURIComponent(baseUri);
+    return this.request<UserInfo>("DELETE", `/users/${encodedUsername}/register/${encodedUri}`);
+  }
+
+  // =========================================================================
+  // UUID Lookup API
+  // =========================================================================
+
+  /**
+   * Get datasets by UUID
+   * Returns all instances of a dataset with that UUID across base URIs the user has access to
+   *
+   * @param uuid - Dataset UUID
+   * @returns Array of datasets with that UUID
+   */
+  async getDatasetsByUuid(uuid: string): Promise<DatasetEntry[]> {
+    return this.request<DatasetEntry[]>(
+      "GET",
+      `/uuids/${encodeURIComponent(uuid)}`
+    );
+  }
+
+  // =========================================================================
+  // Dependency Graph Plugin API
+  // =========================================================================
+
+  /**
+   * Get dependency graph for a dataset by UUID
+   * Returns all datasets in the same dependency graph (bidirectional traversal)
+   * Requires dserver-dependency-graph-plugin to be installed
+   *
+   * @param uuid - Dataset UUID
+   * @param dependencyKeys - Optional array of custom dependency keys (e.g., ["readme.derived_from.uuid"])
+   * @returns Array of datasets in the dependency graph with derived_from relationships
+   */
+  async getDependencyGraph(uuid: string, dependencyKeys?: string[]): Promise<GraphDatasetEntry[]> {
+    const encodedUuid = encodeURIComponent(uuid);
+    if (dependencyKeys && dependencyKeys.length > 0) {
+      // Use POST endpoint with custom dependency keys
+      return this.request<GraphDatasetEntry[]>(
+        "POST",
+        `/graph/uuids/${encodedUuid}`,
+        { dependency_keys: dependencyKeys }
+      );
+    }
+    // Use default GET endpoint
+    return this.request<GraphDatasetEntry[]>("GET", `/graph/uuids/${encodedUuid}`);
   }
 }

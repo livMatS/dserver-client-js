@@ -46,7 +46,17 @@ export type {
   ReadmeResponse,
   ManifestResponse,
   SummaryInfo,
+
+  // User management types
   UserWithPermissions,
+  UserInfo,
+  UserRequest,
+  UserUpdateRequest,
+  BaseURIInfo,
+  BaseURIPermissionsRequest,
+
+  // Dependency graph plugin types
+  GraphDatasetEntry,
 } from "./types";
 
 // Error classes (these are values, not just types)
@@ -62,6 +72,7 @@ export {
   generateIdentifier,
   generateUUID,
   encodeUri,
+  parsePaginationHeader,
   getCurrentTimestamp,
   parseISOTimestamp,
   isExpired,
